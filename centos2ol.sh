@@ -266,7 +266,11 @@ for package_name in "${!packages_to_replace[@]}"; do
     fi
 done
 
+# ----- ステップ 7：yumのロック確認とPython実行環境の確認 ----- #
 
+# /var/run/yum.pid が存在する場合、yum が 他のプロセスによって使用中であることを意味する。
+# この状態で yum を実行しようとすると競合エラーが出るため、明示的に停止を要求する。
+# 実際に動いているプロセスのコマンド名を /proc/$pid/comm から取得し、親切な案内付きで終了する。
 echo "Checking for yum lock..."
 if [ -f /var/run/yum.pid ]; then
     yum_lock_pid=$(cat /var/run/yum.pid)
@@ -277,6 +281,9 @@ Running as pid: $yum_lock_pid
 Run 'kill $yum_lock_pid' to stop it, then run this script again."
 fi
 
+# Oracle Linux 8, 9 系では DNF の内部動作に /usr/libexec/platform-python を使用する（Python 3系）。
+# Oracle Linux 7 以下では python2（通常は /usr/bin/python2）を使用。
+# dep_check 関数を使って、必要なPythonバイナリが存在することを検証。
 echo "Checking for required python packages..."
 case "$os_version" in
     8* | 9* )
@@ -287,6 +294,10 @@ case "$os_version" in
         ;;
 esac
 
+# ----- ステップ 8：DNFモジュール（RHEL系ストリーム）の検出と対話的確認（OL8/OL9） ----- #
+
+# 対象は CentOS 8 系限定（9系ではまだ対応が異なる）。
+# dnf module list --enabled によって、現在有効になっているモジュールストリームをリストアップする。
 if [[ "$os_version" =~ 8.* ]]; then
     echo "Identifying dnf modules that are enabled"
     # There are a few dnf modules that are named after the distribution
@@ -326,6 +337,11 @@ You may want select No to stop and raise an issue on ${github_url} for advice."
     fi
 fi
 
+# ----- ステップ 9：リポジトリディレクトリと有効なYUM/DNFリポジトリの検出 ----- #
+
+# OSバージョンが8/9の場合：platform-python を使って DNF API から reposdir を取得。
+# 7以前の場合：Python2 + YUM API を使って取得。
+# 結果として /etc/yum.repos.d やそれに相当するディレクトリが得られる。
 echo "Finding your repository directory..."
 case "$os_version" in
     8* | 9* )
@@ -351,6 +367,10 @@ for dir in yum.YumBase().doConfigSetup(init_plugins=False).reposdir:
         ;;
 esac
 
+# 同様に OS バージョン別で処理を分けて、
+# dnf API or yum API を使って
+# 有効になっている（enabled）リポジトリのID一覧を取得します。
+# この情報は、後で Oracle Linux 側で対応するリポジトリに切り替える際の判断材料になる。
 echo "Learning which repositories are enabled..."
 case "$os_version" in
     8* | 9* )
@@ -376,10 +396,17 @@ for repo in base.repos.listEnabled():
 esac
 echo -e "Repositories enabled before update include:\n${enabled_repos}"
 
+# reposdir が取得できなかった場合は異常終了。
+# 問題なければ、そのディレクトリに cd（多くの場合 /etc/yum.repos.d）
 if [ -z "${reposdir}" ]; then
     exit_message "Could not locate your repository directory."
 fi
 cd "$reposdir"
+
+# ----- ステップ 10：Oracle Linux 用 .repo ファイルの配置 ----- #
+
+# Oracle Linux 8/9 では .repo ファイルの内容を スクリプト内に直接埋め込む
+# Oracle Linux 6/7 では .repo ファイルを curl で ダウンロードする
 
 # No https://yum.oracle.com/public-yum-ol8.repo file exists
 # Download the content for 6 and 7 based systems and directly enter the content for 8 based systems
@@ -452,6 +479,8 @@ EOF
         ;;
 esac
 
+# ----- ステップ 11：yumdownloader の存在確認とインストール ----- #
+
 echo "Looking for yumdownloader..."
 if ! have_program yumdownloader; then
     # CentOS 6 mirrors are now offline, if yumdownloader tool is not present then
@@ -468,6 +497,8 @@ if ! have_program yumdownloader; then
     esac
     dep_check yumdownloader
 fi
+
+# ----- ステップ 12：CentOS のリポジトリ設定ファイルの退避（無効化） ----- #
 
 cd "$(mktemp -d)"
 trap final_failure ERR
@@ -509,6 +540,8 @@ done < repo_files
 echo "Removing CentOS-specific yum configuration from /etc/yum.conf"
 sed -i.bak -e 's/^distroverpkg/#&/g' -e 's/^bugtracker_url/#&/g' /etc/yum.conf
 
+# ----- ステップ 13：Oracle Linux の release パッケージの取得と導入 ----- #
+
 echo "Downloading Oracle Linux release package..."
 if ! yumdownloader "${new_releases[@]}"; then
     {
@@ -534,6 +567,8 @@ fi
 
 # At this point, the switch is completed.
 trap - ERR
+
+# ----- ステップ 14：有効だったCentOSリポジトリに対応するOracle LinuxリポジトリまたはRPMの自動有効化 ----- #
 
 # When an additional enabled CentOS repository has a match with Oracle Linux
 #  then automatically enable the OL repository to ensure the RPM is maintained
@@ -615,6 +650,13 @@ for reponame in ${enabled_repos}; do
         fi
     fi
 done
+
+# ----- ステップ 15：CentOS 固有パッケージの削除と Oracle Linux ベースパッケージの導入 ----- #
+# このステップによって：
+# CentOS/他ディストリの痕跡が取り除かれ
+# Oracle Linux の公式パッケージが導入され
+# OSの中身が「Oracle Linuxそのもの」になる
+# という、大きな転換点となる処理が実行される。
 
 echo "Installing base packages for Oracle Linux..."
 if ! yum shell -y <<EOF
