@@ -108,6 +108,14 @@ reinstall_all_rpms=false
 verify_all_rpms=false
 install_uek_kernel=true
 
+# getopts "hrkV" でスクリプトに渡されたオプションを解析。
+# 以下のような対応をします：
+# オプション	意味
+# -h	ヘルプ表示 (usage を呼び出して終了)
+# -r	CentOSのRPMをOracle Linux版で再インストール
+# -k	UEKカーネルをインストールしない（かつリポジトリ無効化）
+# -V	RPM情報を変換前後で記録・検証する（generate_rpms_info が動く）
+# *) は未知のオプションをキャッチして usage を表示します。
 while getopts "hrkV" option; do
     case "$option" in
         h) usage ;;
