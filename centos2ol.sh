@@ -74,6 +74,8 @@ dep_check() {
     fi
 }
 
+# メッセージを標準エラー出力に出して終了するための共通関数。
+# どの関数からも呼び出せるようになっており、一貫したエラー表示を実現。
 exit_message() {
     echo "$1"
     echo "For assistance, please open an issue via GitHub: ${github_url}."
