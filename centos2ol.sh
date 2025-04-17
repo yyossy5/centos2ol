@@ -12,9 +12,15 @@ set -e
 # 移動する可能性があるため、予防的に無効化。
 unset CDPATH
 
+# yum_url は Oracle Linux のパッケージ提供元
+# github_url はサポート問い合わせ用（エラー時に出力される）
+# arch はアーキテクチャ取得（x86_64 など）→ 後ほど UEK カーネル選定などで使用
 yum_url=https://yum.oracle.com
 github_url=https://github.com/oracle/centos2ol/
 arch=$(uname -m)
+
+# CentOS や Rocky Linux 固有のパッケージを列挙しており、Oracle Linux に置き換えるべき対象。
+# スクリプト後半で yum remove に使われ、Oracle Linux の互換性を保つために削除される。
 bad_packages=(centos-backgrounds centos-gpg-keys centos-logos centos-release centos-release-cr desktop-backgrounds-basic \
               centos-release-advanced-virtualization centos-release-ansible26 centos-release-ansible-27 \
               centos-release-ansible-28 centos-release-ansible-29 centos-release-azure \
