@@ -41,6 +41,9 @@ bad_packages=(centos-backgrounds centos-gpg-keys centos-logos centos-release cen
               libreport-centos libreport-plugin-mantisbt libreport-plugin-rhtsupport python3-syspurpose \
               python-oauth rocky-backgrounds rocky-gpg-keys rocky-logos rocky-release sl-logos yum-rhn-plugin)
 
+# オプションのヘルプメッセージを出力し、終了する。
+# ${0##*/} はスクリプトのファイル名部分だけを表示（basename $0 と同等）
+# >&2 により 標準エラー出力に出力 される（正規の出力と分けるため）
 usage() {
     echo "Usage: ${0##*/} [OPTIONS]"
     echo
