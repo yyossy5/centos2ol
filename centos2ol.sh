@@ -100,10 +100,12 @@ generate_rpms_info() {
 
 ## Start of script
 
+# これらは getopts で指定されるオプションに対応する フラグ変数。
+# デフォルト値として：
+# Oracle UEK カーネルは「インストールする」前提（true）
+# RPM再インストールや検証は「しない」前提（false）
 reinstall_all_rpms=false
-
 verify_all_rpms=false
-
 install_uek_kernel=true
 
 while getopts "hrkV" option; do
