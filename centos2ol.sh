@@ -6,7 +6,10 @@
 # Oracle Linux yum repository.
 #
 
+# エラーが出たらスクリプトを中断。安全性を保つための基本設定。
 set -e
+# cd コマンドが $CDPATH に影響されると予期せぬディレクトリに
+# 移動する可能性があるため、予防的に無効化。
 unset CDPATH
 
 yum_url=https://yum.oracle.com
