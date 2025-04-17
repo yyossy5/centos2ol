@@ -88,6 +88,9 @@ final_failure() {
     echo "An error occurred while attempting to switch this system to Oracle Linux and it may be in an unstable/unbootable state. To avoid further issues, the script has terminated."
 }
 
+# $1 は before または after を受け取り、「変換前 / 変換後のパッケージ一覧ログ」を生成
+# rpm -qa で詳細なパッケージリストをファイルに出力（.logファイル）
+# rpm -Va は インストール済みパッケージの整合性検査を行い、出力を別ファイルに保存
 generate_rpms_info() {
     echo "Creating a list of RPMs installed $1 the switch"
     rpm -qa --qf "%{NAME}-%{EPOCH}:%{VERSION}-%{RELEASE}.%{ARCH}|%{INSTALLTIME}|%{VENDOR}|%{BUILDTIME}|%{BUILDHOST}|%{SOURCERPM}|%{LICENSE}|%{PACKAGER}\n" | sed 's/(none)://g' | sort > "/var/tmp/$(hostname)-rpms-list-$1.log"
