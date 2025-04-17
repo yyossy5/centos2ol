@@ -109,13 +109,13 @@ verify_all_rpms=false
 install_uek_kernel=true
 
 # getopts "hrkV" でスクリプトに渡されたオプションを解析。
-# 以下のような対応をします：
+# 以下のような対応をする：
 # オプション	意味
 # -h	ヘルプ表示 (usage を呼び出して終了)
 # -r	CentOSのRPMをOracle Linux版で再インストール
 # -k	UEKカーネルをインストールしない（かつリポジトリ無効化）
 # -V	RPM情報を変換前後で記録・検証する（generate_rpms_info が動く）
-# *) は未知のオプションをキャッチして usage を表示します。
+# *) は未知のオプションをキャッチして usage を表示する。
 while getopts "hrkV" option; do
     case "$option" in
         h) usage ;;
@@ -126,8 +126,8 @@ while getopts "hrkV" option; do
     esac
 done
 
-# ARMアーキテクチャでは -k オプションがあっても UEKカーネルの使用が強制されます。
-# OracleがARM上ではUEKに依存しているためと思われます。
+# ARMアーキテクチャでは -k オプションがあっても UEKカーネルの使用が強制される。
+# OracleがARM上ではUEKに依存しているためと思われる。
 # Force the UEK on Arm hosts
 if [ "$arch" == "aarch64" ]; then
     install_uek_kernel=true
@@ -140,6 +140,11 @@ if [ "$(id -u)" -ne 0 ]; then
 Try running 'su -c ${0}'."
 fi
 
+# dep_check 関数を使って、3つのコマンドの存在確認を行う：
+# rpm: インストール済みパッケージの管理に使用
+# yum: パッケージインストール/削除のためのパッケージマネージャ
+# curl: Oracle Linux の .repo ファイルや GPG鍵などの取得に使用
+# → 存在しないとスクリプトは exit_message によって中断される。
 echo "Checking for required packages..."
 for pkg in rpm yum curl; do
     dep_check "${pkg}"
