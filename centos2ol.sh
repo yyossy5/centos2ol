@@ -6,6 +6,8 @@
 # Oracle Linux yum repository.
 #
 
+# ----- ステップ 1：基本的な前提と変数の設定 ----- #
+
 # エラーが出たらスクリプトを中断。安全性を保つための基本設定。
 set -e
 # cd コマンドが $CDPATH に影響されると予期せぬディレクトリに
@@ -40,6 +42,8 @@ bad_packages=(centos-backgrounds centos-gpg-keys centos-logos centos-release cen
               centos-release-xen-412 centos-release-xen-46 centos-release-xen-48 centos-release-xen-common \
               libreport-centos libreport-plugin-mantisbt libreport-plugin-rhtsupport python3-syspurpose \
               python-oauth rocky-backgrounds rocky-gpg-keys rocky-logos rocky-release sl-logos yum-rhn-plugin)
+
+# ----- ステップ 2：関数の定義 ----- #
 
 # オプションのヘルプメッセージを出力し、終了する。
 # ${0##*/} はスクリプトのファイル名部分だけを表示（basename $0 と同等）
@@ -98,6 +102,8 @@ generate_rpms_info() {
     rpm -Va | sort -k3 > "/var/tmp/$(hostname)-rpms-verified-$1.log"
 }
 
+# ----- ステップ 3：コマンドラインオプション処理 ----- #
+
 ## Start of script
 
 # これらは getopts で指定されるオプションに対応する フラグ変数。
@@ -140,6 +146,8 @@ if [ "$(id -u)" -ne 0 ]; then
 Try running 'su -c ${0}'."
 fi
 
+# ----- ステップ 4：必要コマンドの依存チェックとディストリビューションの確認 ----- #
+
 # dep_check 関数を使って、3つのコマンドの存在確認を行う：
 # rpm: インストール済みパッケージの管理に使用
 # yum: パッケージインストール/削除のためのパッケージマネージャ
@@ -176,7 +184,7 @@ fi
 
 # 対応しているディストリビューションは以下のみ：
 # centos-release*, rocky-release*, sl-release*, redhat-release*
-# すでに Oracle Linux の場合や、他に該当しない場合は 変換不要・非サポートとして終了します。
+# すでに Oracle Linux の場合や、他に該当しない場合は 変換不要・非サポートとして終了する。
 case "${old_release}" in
     redhat-release*) ;;
     centos-release* | centos-linux-release*) ;;
@@ -188,14 +196,29 @@ case "${old_release}" in
     *) exit_message "You appear to be running an unsupported distribution." ;;
 esac
 
+# ----- ステップ 5：OSバージョンに基づいたリポジトリ・パッケージ選定 ----- #
+
+# rpm -q で取得したディストリパッケージからバージョン番号だけを取り出します（例：8.5.2111 → 8）。
+# major_os_version=${os_version:0:1} により、バージョンの 最初の1桁だけ取り出す。
+# Oracle Linux のリポジトリ名やリリース RPM 名の切り替えに使う。
 os_version=$(rpm -q "${old_release}" --qf "%{version}")
 major_os_version=${os_version:0:1}
+
+# -k オプションで install_uek_kernel=false になると kernel-uek は含まれない。
+# これにより、UEKカーネルを入れるかどうかで base_packages の構成が変わるようにしている。
 if "${install_uek_kernel}"; then
   base_packages=(basesystem initscripts oracle-logos kernel-uek)
 else
   base_packages=(basesystem initscripts oracle-logos)
 fi
 
+# このブロックでは OS メジャーバージョンごとに：
+# 項目	説明
+# repo_file	Oracleのyumレポファイル名
+# new_releases	Oracle側のrelease系パッケージ群
+# base_packages	Oracle側で最低限必要なパッケージ群（+ grub関連など）
+# 例えば CentOS 8 → Oracle Linux 8 の場合は public-yum-ol8.repo を使い、oraclelinux-release-el8 などを導入する。
+# plymouth, grub2, grubby などは起動ローダーや初期表示（splash screen）に必要なパッケージ。
 case "$os_version" in
     9*)
 	repo_file=public-yum-ol9.repo
@@ -220,11 +243,21 @@ case "$os_version" in
     *) exit_message "You appear to be running an unsupported distribution." ;;
 esac
 
+# ----- ステップ 6：EPELなどの特定パッケージの置き換え ----- #
+
+# declare -A は 連想配列（辞書） の定義。
+# ここでは epel-release（Extra Packages for Enterprise Linux）を oracle-epel-release-el8 などに置き換える定義。
+# ${major_os_version} を使って el7, el8, el9 に自動対応。
 # Some packages need to be replaced as part of switch
 # Store as key value, if the first RPM is found then it's removed and the associated RPM installed
 declare -A packages_to_replace=(
     [epel-release]="oracle-epel-release-el${major_os_version}"
 )
+
+# システムに epel-release がインストールされている場合：
+# bad_packages（削除対象リスト）に追加
+# base_packages（インストール対象リスト）に Oracle 版の EPEL リリースを追加
+# → 単なる削除ではなく「Oracle 版で置き換える」処理を実装しているのがポイント。
 # Switch RPMs if they're installed
 for package_name in "${!packages_to_replace[@]}"; do
     if rpm -q "${package_name}" ; then
