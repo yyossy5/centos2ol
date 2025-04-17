@@ -66,6 +66,8 @@ have_program() {
     hash "$1" >/dev/null 2>&1
 }
 
+# have_program を使って、指定された依存プログラムがなければエラーで終了。
+# exit_message を使って、丁寧なエラーメッセージ付きで止まる。
 dep_check() {
     if ! have_program "$1"; then
         exit_message "'${1}' command not found. Please install or add it to your PATH and try again."
