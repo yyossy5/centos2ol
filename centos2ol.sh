@@ -150,11 +150,15 @@ for pkg in rpm yum curl; do
     dep_check "${pkg}"
 done
 
+# /etc/redhat-release を提供しているパッケージ（例：centos-release, rocky-release）を特定する。
+# 見つからない場合（つまり非RedHat系のOSの場合）はサポート外として終了。
 echo "Checking your distribution..."
 if ! old_release=$(rpm -q --whatprovides /etc/redhat-release); then
     exit_message "You appear to be running an unsupported distribution."
 fi
 
+# /etc/redhat-release を複数のパッケージが提供していた場合、どのディストリか特定できないため終了する。
+# 例えば centos-release と rocky-release が共存していたらエラーになる。
 if [ "$(echo "${old_release}" | wc -l)" -ne 1 ]; then
     exit_message "Could not determine your distribution because multiple
 packages are providing redhat-release:
@@ -162,11 +166,17 @@ $old_release
 "
 fi
 
+# -V オプションが指定された場合に発動。
+# 変換前の RPM パッケージの詳細情報を /var/tmp/ホスト名-rpms-list-before.log などに出力。
+# 変換後にも同じ関数で after ログを出力し、比較できるようにする。
 # Collect information about RPMs before the switch
 if "${verify_all_rpms}"; then
     generate_rpms_info before
 fi
 
+# 対応しているディストリビューションは以下のみ：
+# centos-release*, rocky-release*, sl-release*, redhat-release*
+# すでに Oracle Linux の場合や、他に該当しない場合は 変換不要・非サポートとして終了します。
 case "${old_release}" in
     redhat-release*) ;;
     centos-release* | centos-linux-release*) ;;
