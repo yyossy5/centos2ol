@@ -82,6 +82,8 @@ exit_message() {
     exit 1
 } >&2
 
+# スクリプトのどこかで重大な失敗が起きた時にトラップとして使うメッセージ。
+# 実際には trap final_failure ERR のように使われ、スクリプトの失敗時に自動実行される。
 final_failure() {
     echo "An error occurred while attempting to switch this system to Oracle Linux and it may be in an unstable/unbootable state. To avoid further issues, the script has terminated."
 }
