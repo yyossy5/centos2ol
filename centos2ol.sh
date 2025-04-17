@@ -126,11 +126,15 @@ while getopts "hrkV" option; do
     esac
 done
 
+# ARMアーキテクチャでは -k オプションがあっても UEKカーネルの使用が強制されます。
+# OracleがARM上ではUEKに依存しているためと思われます。
 # Force the UEK on Arm hosts
 if [ "$arch" == "aarch64" ]; then
     install_uek_kernel=true
 fi
 
+# スクリプトは root権限で実行しなければならない ため、
+# 非rootならエラーメッセージを表示して終了。
 if [ "$(id -u)" -ne 0 ]; then
     exit_message "You must run this script as root.
 Try running 'su -c ${0}'."
