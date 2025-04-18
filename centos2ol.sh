@@ -706,8 +706,14 @@ fi
 
 # この時点で、システム上のすべてのRPMパッケージが、Oracle Linuxのリポジトリ由来で構成される状態になる。
 
+# ----- ステップ 17： CentOS特有の後処理（yumプラグイン削除・DNFモジュール再設定・ロゴ置換） ----- #
+# このステップで、OS見た目やパッケージの内部構成まで Oracle Linux 向けに最適化される。
+
 # CentOS specific replacements
 case "$os_version" in
+    # CentOS 7 系：yum-plugin-fastestmirror の削除
+    # yum-plugin-fastestmirror は CentOS 環境でよく使われるプラグインだが、
+    # Oracle Linux では不要かつ非推奨なので削除。
     7*)
         # Prior to switch this is a dependancy of the yum rpm, now we've switched we can remove it
         if rpm -q yum-plugin-fastestmirror; then
@@ -735,6 +741,9 @@ case "$os_version" in
             dnf --assumeyes --disablerepo "*" --enablerepo "ol8_appstream" update
         fi
 
+	# ロゴ置換（centos-logos-ipa, centos-logos-httpd）
+        # Oracle側に置き換え候補がないため、明示的に CentOSロゴパッケージをOracleロゴに交換する。
+        # これは UI・Webコンソール等で表示される「CentOS」表記を Oracle に変える目的。
         # Two logo RPMs aren't currently covered by 'replaces' metadata, replace by hand.
         if rpm -q centos-logos-ipa; then
             dnf swap -y centos-logos-ipa oracle-logos-ipa
@@ -745,8 +754,16 @@ case "$os_version" in
         ;;
 esac
 
+# ----- ステップ 18： CentOS RPM の再インストール処理（-r オプション） ----- #
+# -r オプションを指定すると、CentOS 由来のRPMをすべて Oracle Linux のものに「再インストール」してクリーンな状態に仕上げる。
+
+# -r オプションにより reinstall_all_rpms=true のときに実行される。
+# 実際には、VENDOR 情報が CentOS になっているパッケージを対象に抽出して再インストールする。
 if "${reinstall_all_rpms}"; then
     echo "Testing for remaining CentOS RPMs"
+    
+    #rpm -qa --qf でパッケージ名とVENDORを一覧にし、grep CentOS で CentOS 由来パッケージを抽出
+    # ARM（aarch64）の場合は kernel を除外（UEK に置き換わっているため）
     # If CentOS and Oracle Linux have identically versioned RPMs then those RPMs are left unchanged.
     #  This should have no technical impact but for completeness, reinstall these RPMs
     #  so there is no accidental cross pollination.
@@ -759,10 +776,16 @@ if "${reinstall_all_rpms}"; then
             ;;
     esac
 
+    # 再インストールの実行
+    # Oracle Linux のリポジトリ（ol*）のみを有効にし、CentOS 由来のパッケージを すべて再インストール
+    # これにより、仮にバージョンは同じでもビルドや署名の違う CentOS RPM をOracle Linux に純化できる。
     if [[ -n "${list_of_centos_rpms[*]}" ]] && [[ "${#list_of_centos_rpms[@]}" -ne 0 ]]; then
         echo "Reinstalling RPMs: ${list_of_centos_rpms[*]}"
         yum --assumeyes --disablerepo "*" --enablerepo "ol*" reinstall "${list_of_centos_rpms[@]}"
     fi
+    # その他、Oracle 以外の VENDOR のパッケージ一覧表示
+    # Oracle以外（EPEL、自社ビルド等）も含めて一覧を表示
+    # これは 警告ではなく、情報提供として表示される
     # See if non-Oracle RPMs are present and print them
     mapfile -t non_oracle_rpms < <(rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}|%{VENDOR}|%{PACKAGER}\n" |grep -v Oracle)
     if [[ -n "${non_oracle_rpms[*]}" ]]; then
