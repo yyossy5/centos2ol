@@ -658,6 +658,16 @@ done
 # OSの中身が「Oracle Linuxそのもの」になる
 # という、大きな転換点となる処理が実行される。
 
+# このブロックでは yum shell という機能を使って、複数の yum コマンド（remove + install）を 1つのセッションでまとめて実行。
+# remove ${bad_packages[@]}
+# bad_packages 配列には、スクリプト冒頭で定義した CentOS / Rocky Linux 専用のパッケージ名が多数含まれており、
+# 例：centos-logos, centos-release, rocky-gpg-keys など
+# これらを すべて一括削除 する。
+# base_packages 配列には、Oracle Linux の動作に必須な基本パッケージが含まれる。
+# 例：oraclelinux-release, oracle-logos, initscripts, kernel-uek（※UEK導入時）
+# エラー処理
+# もし yum shell 実行中にエラーが発生した場合は exit_message で中断。
+# メッセージ内で "yum distro-sync" による手動復旧を案内。
 echo "Installing base packages for Oracle Linux..."
 if ! yum shell -y <<EOF
 remove ${bad_packages[@]}
@@ -668,17 +678,33 @@ then
     exit_message "Could not install base packages.
 Run 'yum distro-sync' to manually install them."
 fi
+
+# ----- ステップ 16： initrd（初期RAMディスク）の更新とパッケージの完全同期（distro-sync） ----- #
+# このステップでは、新しいカーネルやベースパッケージに合わせた初期化RAMディスク（initrd）の更新と、
+# システム全体をOracle Linuxのリポジトリに完全に同期する。
+
+# initrd（初期RAMディスク）の更新:
+# Oracle Linux（特に8以降）では plymouth が initrd の更新に関与する。
+# plymouth-update-initrd を実行することで、新しいカーネルに対応した初期RAMディスクを生成する。
+# この処理は ブートの安定性を確保するために必須。
 if [ -x /usr/libexec/plymouth/plymouth-update-initrd ]; then
     echo "Updating initrd..."
     /usr/libexec/plymouth/plymouth-update-initrd
 fi
 
+# パッケージ同期（distro-sync）
+# yum distro-sync は、インストールされているすべてのパッケージが
+# 現在有効なリポジトリとバージョン一致するように再インストール・アップ/ダウングレードする。
+# CentOS → Oracle Linux への変換では、リリースRPM以外のパッケージが
+# そのまま残っていることがあるため、最後の整合性合わせとして重要。
 echo "Switch successful. Syncing with Oracle Linux repositories."
 
 if ! yum -y distro-sync; then
     exit_message "Could not automatically sync with Oracle Linux repositories.
 Check the output of 'yum distro-sync' to manually resolve the issue."
 fi
+
+# この時点で、システム上のすべてのRPMパッケージが、Oracle Linuxのリポジトリ由来で構成される状態になる。
 
 # CentOS specific replacements
 case "$os_version" in
