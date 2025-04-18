@@ -6,6 +6,15 @@
 # Oracle Linux yum repository.
 #
 
+# ステップ	          内容
+# リポジトリ切り替え	  CentOS → Oracle の .repo 設定へ
+# Releaseパッケージ切り替え  centos-release → oraclelinux-release
+# カーネル対応	          UEKカーネル導入（またはスキップ）
+# パッケージ整合	          yum distro-sync, base_packages 再構成
+# ブート整備	          initrd, GRUB, grubby などの更新
+# 最終確認	          オプションに応じた再インストールや検証
+
+
 # ----- ステップ 1：基本的な前提と変数の設定 ----- #
 
 # エラーが出たらスクリプトを中断。安全性を保つための基本設定。
@@ -799,6 +808,14 @@ fi
 
 echo "Sync successful."
 
+# ----- ステップ 19： GRUB更新、UEKカーネル設定、キャッシュ削除、再起動案内 ----- #
+# このステップでは、ブート設定を整え、不要ファイルを削除し、ユーザーに再起動を促すという最終処理を行う。
+
+# Arm（aarch64）アーキテクチャ用：RHCK の削除
+# UEK カーネルへの切り替えを徹底するため、RHCK（Red Hat Compatible Kernel）を削除。
+# protect_running_kernel=0 を一時的に設定し、現在使用中でも削除できるようにする。
+# 再度 protect_running_kernel=1 に戻すので安全性も確保されている。
+# 削除後は「即時の再起動が必須」と明記される。
 if [ "$arch" == "aarch64" ]; then
     echo "Host is running an Arm CPU: removing RHCK."
     echo "Important: you MUST reboot this instance as soon as possible."
@@ -807,6 +824,9 @@ if [ "$arch" == "aarch64" ]; then
     dnf config-manager --setopt=protect_running_kernel=1 --save
 fi
 
+# GRUB 設定ファイルの再生成（UEFI or BIOS）
+# Oracle Linux のカーネル（UEK含む）を GRUB に反映させるために grub2-mkconfig を実行する。
+# UEFI 環境と BIOS 環境で grub.cfg の場所が異なるため、ディレクトリ判定する。
 case "$os_version" in
     7* | 8* | 9* )
         echo "Updating the GRUB2 bootloader."
@@ -818,15 +838,23 @@ case "$os_version" in
     ;;
 esac
 
+# UEK カーネルをデフォルトに設定
+# vmlinuz-*.uek.* に一致する最新UEKカーネルを検索し、
+# grubby コマンドで 次回起動時にUEKを使用するように設定する。
 if "${install_uek_kernel}"; then
     echo "Switching default boot kernel to the UEK."
     uek_path=$(find /boot -name "vmlinuz-*.el${os_version}uek.${arch}")
     grubby --set-default="${uek_path}"
 fi
 
+# YUM / DNF キャッシュの削除
+# 変換中にダウンロードされたキャッシュを削除し、ディスクのクリーンアップを行う。
 echo "Removing yum cache"
 rm -rf /var/cache/{yum,dnf}
 
+# -V オプション時：変換後のRPM情報を再収集
+# generate_rpms_info after を実行して、変換後のパッケージ状態もログに保存する。
+# before ログと比較すれば、正しく変換されたか確認できる。
 # Collect information about RPMs after the switch
 if "${verify_all_rpms}"; then
     generate_rpms_info after
@@ -834,6 +862,9 @@ if "${verify_all_rpms}"; then
     find /var/tmp/ -type f -name "$(hostname)-rpms-*.log"
 fi
 
+# 最後のメッセージと再起動案内
+# Intel/AMD環境（x86_64）では「再起動推奨」
+# ARM環境では「即時再起動必須」と強く指示されます
 echo "Switch complete."
 
 case "$arch" in
